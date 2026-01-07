@@ -1,4 +1,5 @@
 import numpy as np
+import hashlib
 import config
 
 def spectogram(signal):
@@ -76,9 +77,57 @@ def extract_peaks(S, f, t):
                         if current_energy > max_val:
                             max_val = current_energy
                             max_idx = idx
-                            
+
             # Store the identified peak (timestamp and frequency)
             if max_idx != -1:
                 peaks.append((t[i], f[max_idx]))
                 
     return peaks
+
+def generate_hashes(peaks):
+    hashes = []
+    
+    # Value recommended in Shazam paper
+    FAN_OUT = 10 
+    
+    num_peaks = len(peaks)
+    
+    for i in range(num_peaks):
+        for j in range(1, FAN_OUT + 1):
+            if (i + j) < num_peaks:
+                
+                # Extract data for the Anchor peak
+                anchor = peaks[i]
+                t1 = anchor[0]
+                f1 = anchor[1]
+                
+                # Extract data for the Target peak
+                target = peaks[i + j]
+                t2 = target[0]
+                f2 = target[1]
+                
+                t_delta = t2 - t1
+                
+                if t_delta > 0 and t_delta <= 3.0:
+                    
+                    # Round frequencies to integers to handle small recording errors
+                    f1_int = int(f1)
+                    f2_int = int(f2)
+                    
+                    # Format the time delta to 2 decimal places
+                    t_delta_formated = round(t_delta, 2)
+                    
+                    # Format: Frequency1 | Frequency2 | Time_Delta
+                    raw_string = str(f1_int) + "|" + str(f2_int) + "|" + str(t_delta_formated)
+                    
+                    # Encode the string to bytes so it can be hashed
+                    encoded_string = raw_string.encode('utf-8')
+                    
+                    # Apply the SHA-1 algorithm to create a unique signature
+                    sha1_obj = hashlib.sha1(encoded_string)
+                    hash_result = sha1_obj.hexdigest()
+                    
+                    final_pair = (hash_result, t1)
+                    hashes.append(final_pair)
+                    
+    return hashes
