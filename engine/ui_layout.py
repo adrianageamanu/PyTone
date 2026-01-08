@@ -1,12 +1,20 @@
 import gradio as gr
+import utils.youtube_fetcher as yt
 
-def identify_from_spotify(url):
-    return f"Loaded Spotify track: {url}"
+def identify_from_youtube(url):
+    return f"Loaded Youtube song: {yt.get_song_info_from_youtube(url)}"
 
 def identify_from_mic(audio):
     return "Identified song from microphone input"
 
-with gr.Blocks(title="PyTone") as ui_layout:
+with gr.Blocks(
+    title="PyTone",
+    theme=gr.themes.Default(
+        primary_hue=gr.themes.colors.green,
+        secondary_hue=gr.themes.colors.emerald,
+        neutral_hue=gr.themes.colors.gray,
+    )
+) as ui_layout:
     # title
     gr.Markdown("# PyTone")
     # subtitle
@@ -16,17 +24,17 @@ with gr.Blocks(title="PyTone") as ui_layout:
     with gr.Tabs():
         # training tab
         with gr.Tab("Train a new song"):
-            spotify_url = gr.Textbox(
-                label="Paste the Spotify URL of the song you want to use for training:",
-                placeholder="https://open.spotify.com/track/..."
+            youtube_url = gr.Textbox(
+                label="Paste the Youtube URL of the song you want to use for training:",
+                placeholder="https://www.youtube.com/watch?v=..."
             )
-            spotify_btn = gr.Button("Load the track")
-            spotify_output = gr.Textbox(label="Result")
+            youtube_button = gr.Button("Load the song")
+            youtube_output = gr.Textbox(label="Result")
 
-            spotify_btn.click(
-                identify_from_spotify,
-                inputs=spotify_url,
-                outputs=spotify_output
+            youtube_button.click(
+                identify_from_youtube,
+                inputs=youtube_url,
+                outputs=youtube_output
             )
 
         # identification tab
@@ -44,13 +52,3 @@ with gr.Blocks(title="PyTone") as ui_layout:
                 inputs=mic_input,
                 outputs=listen_output
             )
-
-# launch ui
-ui_layout.launch(
-    # ui theme
-    theme=gr.themes.Default(
-        primary_hue=gr.themes.colors.green,
-        secondary_hue=gr.themes.colors.emerald,
-        neutral_hue=gr.themes.colors.gray,
-    )
-)

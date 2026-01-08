@@ -1,0 +1,12 @@
+numpy
+scipy
+librosa
+matplotlib
+mysql-connector-python
+redis
+gradio
+flask
+yt-dlp
+pydub
+python-dotenv
+requests
