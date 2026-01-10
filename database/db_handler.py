@@ -44,7 +44,9 @@ def setup_database():
             id INT AUTO_INCREMENT PRIMARY KEY,
             hash_value VARCHAR(255),
             song_id INT,
-            FOREIGN KEY (song_id) REFERENCES Song(id)
+            offset_time FLOAT,
+            FOREIGN KEY (song_id) REFERENCES Song(id),
+            INDEX (hash_value)
         )
     """)
 
@@ -94,12 +96,12 @@ def add_song(name, artist, duration):
         # return none
         return None
     
-def add_hash_to_song(song_id, hash_val):
+def add_hash_to_song(song_id, hash_val, offset_time):
     try:
         # insert command
-        sql = "INSERT INTO Hash (hash_value, song_id) VALUES (%s, %s)"
+        sql = "INSERT INTO Hash (hash_value, song_id, offset_time) VALUES (%s, %s, %s)"
         # values to insert
-        val = (hash_val, song_id)
+        val = (hash_val, song_id, offset_time)
 
         # execute insert
         mycursor.execute(sql, val)
