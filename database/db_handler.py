@@ -11,11 +11,19 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 
 # connect to mysql database
-mydb = mysql.connector.connect(
-    host=DB_HOST,
-    user=DB_USER,
-    password=DB_PASSWORD
-)
+try:
+    mydb = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+except mysql.connector.Error:
+    mydb = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
 
 # create a cursor object
 mycursor = mydb.cursor()
@@ -34,7 +42,8 @@ def setup_database():
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255),
             artist VARCHAR(255),
-            duration INT
+            duration INT,
+            thumbnail_url VARCHAR(500)
         )
     """)
 
@@ -57,7 +66,7 @@ def show_db_tables():
     for x in mycursor:
         print(x)
 
-def add_song(name, artist, duration):
+def add_song(name, artist, duration, thumbnail_url):
     try:
         # check for duplicate with limit to prevent unread result errors
         check_sql = "SELECT id FROM Song WHERE name = %s AND artist = %s LIMIT 1"
@@ -74,9 +83,9 @@ def add_song(name, artist, duration):
             return result[0]
 
         # insert command
-        sql = "INSERT INTO Song (name, artist, duration) VALUES (%s, %s, %s)"
+        sql = "INSERT INTO Song (name, artist, duration, thumbnail_url) VALUES (%s, %s, %s, %s)"
         # values to insert
-        val = (name, artist, duration)
+        val = (name, artist, duration, thumbnail_url)
 
         # execute insert
         mycursor.execute(sql, val)
@@ -94,15 +103,15 @@ def add_song(name, artist, duration):
         # return none
         return None
     
-def add_hash_to_song(song_id, hash_val):
+def add_hashes(song_id, hashes_list):
     try:
         # insert command
         sql = "INSERT INTO Hash (hash_value, song_id) VALUES (%s, %s)"
         # values to insert
-        val = (hash_val, song_id)
+        val = [(h, song_id) for h in hashes_list]
 
         # execute insert
-        mycursor.execute(sql, val)
+        mycursor.executemany(sql, val)
 
         # save changes
         mydb.commit()
@@ -136,7 +145,7 @@ def get_song_via_hash(hash_val):
         # join tables to find song details
         # with limit to prevent unread result errors
         sql = """
-            SELECT s.name, s.artist 
+            SELECT s.name, s.artist, s.duration, s.thumbnail_url 
             FROM Song s 
             JOIN Hash h ON s.id = h.song_id 
             WHERE h.hash_value = %s
