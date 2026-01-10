@@ -1,6 +1,7 @@
 import numpy as np
 import hashlib
 import config
+from core.audio_loader import load_audio
 
 def spectogram(signal):
     fs = config.SAMPLE_RATE
@@ -131,3 +132,14 @@ def generate_hashes(peaks):
                     hashes.append(final_pair)
                     
     return hashes
+
+def process_audio(path):
+    signal = load_audio(path)
+    
+    S, f, t = spectogram(signal)
+    
+    peaks = extract_peaks(S, f, t)
+    
+    final_hashes = generate_hashes(peaks)
+    
+    return final_hashes
