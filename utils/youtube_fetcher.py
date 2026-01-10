@@ -2,8 +2,25 @@ import yt_dlp
 
 def get_song_info_from_youtube(url):
     # suppress output and skip download
-    ydl_opts = {'quiet': True, 'noplaylist': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        # fetch direct url, removed search wrapper and list index
+    ydl_options = {
+        'quiet': True, 
+        'noplaylist': True,
+
+        # best audio quality
+        'format': 'bestaudio/best',
+    }
+
+    with yt_dlp.YoutubeDL(ydl_options) as ydl:
+        # fetch direct url, no download
         info = ydl.extract_info(url, download=False)
-        return info['title'], info['uploader'], info['duration']
+        return (
+            info['title'], 
+            info['uploader'], 
+            info['duration'],
+
+            # fetch thumbnail url
+            info['thumbnail_url'],
+
+            # fetch audio url
+            info['audio_url']
+        )
