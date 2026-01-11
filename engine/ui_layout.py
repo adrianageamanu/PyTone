@@ -43,7 +43,9 @@ def process_identification(audio, history_list):
     if audio is None:
         # Nu schimbăm nimic dacă nu e audio, doar returnăm un mesaj de eroare sau null
         # Pentru simplitate, returnăm starea curentă neschimbată
-        return gr.update(), gr.update(), gr.update(), gr.update(), history_list
+        gr.Warning("You need to record something before trying to Identify it!")
+
+        return gr.update(), gr.update(), gr.update(), gr.update(), history_list, gr.update()
 
     # Simulare procesare
     time.sleep(1.5)
@@ -224,7 +226,7 @@ with gr.Blocks(
                             )
 
                             redirect_btn = gr.Button(
-                                "Vien on YouTube",
+                                "View on YouTube",
                                 variant="secondary",
                                 size="lg"
                             )
