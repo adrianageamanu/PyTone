@@ -201,7 +201,7 @@ with gr.Blocks(
                 placeholder="https://www.youtube.com/watch?v=..."
             )
             youtube_button = gr.Button("Load the song")
-            youtube_output = gr.Textbox(label="Result")
+            youtube_output = gr.Textbox(label="Result", lines=6)
 
             youtube_button.click(
                 identify_from_youtube,

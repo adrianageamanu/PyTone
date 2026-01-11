@@ -2,31 +2,30 @@ import os
 import mysql.connector
 from dotenv import load_dotenv
 
-# load environment variables from .env
-load_dotenv()
-# read environment variables
-DB_HOST = os.getenv("DB_HOST")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
+# initialize global variables
+mydb = None
+mycursor = None
 
-# connect to mysql database
-try:
-    mydb = mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
-    )
-except mysql.connector.Error:
+def prepare_db_handler():
+    # access global variables to update them
+    global mydb, mycursor
+    
+    # load environment variables from .env
+    load_dotenv()
+    # read environment variables
+    DB_HOST = os.getenv("DB_HOST")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+    # connect to mysql database
     mydb = mysql.connector.connect(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD
     )
 
-# create a cursor object
-mycursor = mydb.cursor()
+    # create a cursor object
+    mycursor = mydb.cursor()
 
 def setup_database():
     # reset db if exists
