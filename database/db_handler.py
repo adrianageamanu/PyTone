@@ -67,6 +67,17 @@ def show_db_tables():
     for x in mycursor:
         print(x)
 
+def get_all_songs():
+    try:
+        sql = "SELECT name, artist, duration, thumbnail_url FROM Song ORDER BY id DESC"
+
+        mycursor.execute(sql)
+
+        return mycursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error fetching the library: {err}")
+        return []
+
 def add_song(name, artist, duration, thumbnail_url, youtube_url):
     try:
         # check for duplicate with limit to prevent unread result errors

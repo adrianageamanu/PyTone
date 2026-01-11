@@ -31,6 +31,23 @@ def identify_from_youtube(url):
 
     except Exception as e:
         return f"Error: {traceback.format_exc()}"
+    
+def load_library_view():
+    try:
+        songs = db_handler.get_all_songs()
+        
+        if not songs:
+            return "<h3 style='color: white; text-align: center;'>Library is empty. Train some songs first!</h3>"
+        
+        html_output = ""
+        for s in songs:
+            # s este un tuplu: (name, artist, duration, thumbnail_url)
+            # Ordinea parametrilor în create_list_style_card este: thumb, title, artist, duration
+            html_output += create_list_style_card(s[3], s[0], s[1], s[2])
+            
+        return html_output
+    except Exception as e:
+        return f"<p style='color: red;'>Error loading library: {str(e)}</p>"
 
 def process_identification(audio, history_list):
     """
@@ -237,6 +254,18 @@ with gr.Blocks(
         with gr.Tab("History"):
             gr.Markdown("Previously Identified Songs")
             history_output = gr.HTML("No songs identified yet.")
+
+        with gr.Tab("Library"):
+            gr.Markdown("### Song Library")
+            refresh_lib_btn = gr.Button("Refresh", size="sm")
+
+            library_output = gr.HTML(value=load_library_view)
+
+            refresh_lib_btn.click(
+                fn=load_library_view,
+                inputs=[],
+                outputs=library_output
+            )
 
     listen_btn.click(
         fn = process_identification,
