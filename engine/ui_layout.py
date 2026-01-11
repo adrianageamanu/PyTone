@@ -36,7 +36,7 @@ def process_identification(audio, history_list):
     """
     Această funcție face 4 lucruri:
     1. Simulează identificarea.
-    2. Generează cardul Apple (pentru vizualizare).
+    2. Generează cardul melodiei (rezultatul).
     3. Actualizează istoricul (adaugă melodia în listă).
     4. Schimbă vizibilitatea (ascunde microfonul, arată rezultatul).
     """
@@ -49,12 +49,26 @@ def process_identification(audio, history_list):
     time.sleep(1.5)
     
     # --- DUMMY DATA ---
-    # Putem randomiza puțin titlul ca să vedem că merge istoricul
     import random
     songs = [
-        {"title": "Bohemian Rhapsody", "artist": "Queen", "dur": 354, "img": "https://upload.wikimedia.org/wikipedia/en/9/9f/Bohemian_Rhapsody.png"},
-        {"title": "Billie Jean", "artist": "Michael Jackson", "dur": 294, "img": "https://upload.wikimedia.org/wikipedia/en/5/55/Michael_Jackson_-_Billie_Jean.jpg"},
-        {"title": "Shape of You", "artist": "Ed Sheeran", "dur": 233, "img": "https://upload.wikimedia.org/wikipedia/en/b/b4/Shape_Of_You_%28Official_Single_Cover%29.png"}
+        {"title": "Bohemian Rhapsody", 
+         "artist": "Queen", 
+         "dur": 354, 
+         "img": "https://upload.wikimedia.org/wikipedia/en/9/9f/Bohemian_Rhapsody.png",
+         "url": "https://www.youtube.com/watch?v=fJ9rUzIMcZQ"
+        },
+        {"title": "Billie Jean", 
+         "artist": "Michael Jackson", 
+         "dur": 294, 
+         "img": "https://upload.wikimedia.org/wikipedia/en/5/55/Michael_Jackson_-_Billie_Jean.jpg",
+         "url": "https://www.youtube.com/watch?v=Zi_XLOBDo_Y"
+        },
+        {"title": "Shape of You", 
+         "artist": "Ed Sheeran", 
+         "dur": 233, 
+         "img": "https://upload.wikimedia.org/wikipedia/en/b/b4/Shape_Of_You_%28Official_Single_Cover%29.png",
+         "url": "https://www.youtube.com/watch?v=JGwWNGJdvx8"
+         }
     ]
     data = random.choice(songs)
 
@@ -76,11 +90,12 @@ def process_identification(audio, history_list):
         gr.update(visible=False),  # Input Container -> Ascuns
         gr.update(visible=True),   # Result Container -> Vizibil
         history_html_content,      # Output pentru History Tab
-        history_list               # Actualizăm variabila de stare (State)
+        history_list,         # Actualizăm variabila de stare (State)
+        gr.update(link=data["url"], visible=True)
     )
 
 def close_overlay():
-    """Funcție simplă care resetează vizualizarea (Butonul Back)"""
+    #butonul back
     return gr.update(visible=True), gr.update(visible=False)
 
 def create_list_style_card(thumbnail_url, title, artist, duration):
@@ -201,11 +216,18 @@ with gr.Blocks(
                     with gr.Column(scale=0, min_width=500):
                         result_card = gr.HTML(label="Identified Song", padding=False)
 
-                        back_btn = gr.Button(
-                            "Search Another",
-                            variant="primary",
-                            size="lg"
-                        )
+                        with gr.Row():
+                            back_btn = gr.Button(
+                                "Search Another",
+                                variant="primary",
+                                size="lg"
+                            )
+
+                            redirect_btn = gr.Button(
+                                "Vien on YouTube",
+                                variant="secondary",
+                                size="lg"
+                            )
                     
                     with gr.Column(scale=1):
                         pass
@@ -222,7 +244,8 @@ with gr.Blocks(
             input_container,
             result_container,
             history_output,
-            history_state
+            history_state,
+            redirect_btn
         ]
     )
 
