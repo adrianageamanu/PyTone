@@ -116,22 +116,28 @@ def add_song(name, artist, duration, thumbnail_url, youtube_url):
         # return none
         return None
     
-def add_hash_to_song(song_id, hash_val, offset_time):
+def add_hashes_batch(val_list):
     try:
-        # insert command
         sql = "INSERT INTO Hash (hash_value, song_id, offset_time) VALUES (%s, %s, %s)"
-        # values to insert
-        val = (hash_val, song_id, offset_time)
-
-        # execute insert
-        mycursor.execute(sql, val)
-
-        # save changes
+        # insert all rows in one go
+        mycursor.executemany(sql, val_list)
         mydb.commit()
+    except mysql.connector.Error as err:
+        print(f"Error batch inserting: {err}")
 
+def get_song_by_id(song_id):
+    try:
+        # select specific fields
+        sql = "SELECT name, artist, duration, thumbnail_url, youtube_url FROM Song WHERE id = %s"
+        val = (song_id,)
+        
+        # execute query
+        mycursor.execute(sql, val)
+        
+        # return single result
+        return mycursor.fetchone()
     except mysql.connector.Error:
-        # print error message
-        print("Error: Song id likely does not exist.")
+        return None
 
 def get_hashes_by_song(song_id):
     try:
@@ -179,3 +185,17 @@ def get_song_via_hash(hash_val):
 
         # return none
         return None
+    
+def get_matches_from_hash(hash_val):
+    try:
+        # select song id and offset
+        sql = "SELECT song_id, offset_time FROM Hash WHERE hash_value = %s"
+        val = (hash_val,)
+        
+        # execute query
+        mycursor.execute(sql, val)
+        
+        # return all hits
+        return mycursor.fetchall()
+    except mysql.connector.Error:
+        return []

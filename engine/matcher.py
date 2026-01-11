@@ -1,40 +1,32 @@
+from database import db_handler
 from core.fingerprinter import process_audio
-import mysql.connector
 from collections import Counter
 
-def find_potential_matches(sample_hashes, db_cursor):
+def find_potential_matches(sample_hashes):
     matches_found = {}
 
     for hash_value, t_sample in sample_hashes:
-        # Search for the hash in the database to find song ID and original timestamp
-        query = "SELECT song_id, offset_time FROM Hash WHERE hash_value = %s"
-        
-        try:
-            db_cursor.execute(query, (hash_value,))
-            database_hits = db_cursor.fetchall()
+        # get hits from db handler
+        database_hits = db_handler.get_matches_from_hash(hash_value)
             
-            if not database_hits:
-                continue
-
-            for song_id, t_db in database_hits:
-                time_diff = t_db - t_sample
-                
-                # Round to 1 decimal to handle slight recording variations
-                time_diff = round(time_diff, 1)
-                
-                # Group time differences by song_id for histogram analysis
-                if song_id not in matches_found:
-                    matches_found[song_id] = []
-                
-                matches_found[song_id].append(time_diff)
-                
-        except mysql.connector.Error:
-            # Skip if there is a database communication error
+        if not database_hits:
             continue
+
+        for song_id, t_db in database_hits:
+            time_diff = t_db - t_sample
+            
+            # round to 1 decimal
+            time_diff = round(time_diff, 1)
+            
+            # group by song id
+            if song_id not in matches_found:
+                matches_found[song_id] = []
+            
+            matches_found[song_id].append(time_diff)
 
     return matches_found
 
-def rank_matches(matches_found, db_cursor):
+def rank_matches(matches_found):
     final_results = []
 
     for song_id, offsets in matches_found.items():
@@ -44,15 +36,16 @@ def rank_matches(matches_found, db_cursor):
         # Get the most frequent offset and its count
         best_offset, peak_score = offset_counts.most_common(1)[0]
         
-        # Fetch song details from the database
-        query = "SELECT name, artist FROM Song WHERE id = %s"
-        db_cursor.execute(query, (song_id,))
-        song_info = db_cursor.fetchone()
+        # fetch song info using db handler
+        song_info = db_handler.get_song_by_id(song_id)
         
         if song_info:
             final_results.append({
-                "name": song_info[0],
+                "title": song_info[0],
                 "artist": song_info[1],
+                "dur": song_info[2],
+                "img": song_info[3],
+                "url": song_info[4],
                 "score": peak_score,
                 "offset": best_offset
             })
@@ -62,23 +55,23 @@ def rank_matches(matches_found, db_cursor):
     
     return final_results
 
-def identify_song(file_path, db_cursor):
+def identify_song(file_path):
     # Get hashes from the audio file
     sample_hashes = process_audio(file_path)
     
     if not sample_hashes:
         print("No hashes generated. Check audio file.")
-        return []
+        return None
 
     # Find matches in database
-    matches = find_potential_matches(sample_hashes, db_cursor)
+    matches = find_potential_matches(sample_hashes)
     
     if not matches:
         print("No matches found in database.")
-        return []
+        return None
 
     # Rank them
-    ranked_list = rank_matches(matches, db_cursor)
+    ranked_list = rank_matches(matches)
 
     # Return the top match
     if ranked_list:
