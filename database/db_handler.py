@@ -2,7 +2,7 @@ import os
 import mysql.connector
 from dotenv import load_dotenv
 
-# initialize global variables
+# initialize database and database cursor as global variables
 mydb = None
 mycursor = None
 
@@ -12,76 +12,92 @@ def prepare_db_handler():
     
     # load environment variables from .env
     load_dotenv()
-    # read environment variables
-    DB_HOST = os.getenv("DB_HOST")
-    DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
 
-    # connect to mysql database
-    mydb = mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
+    try:
+        # read environment variables
+        DB_HOST = os.getenv("DB_HOST")
+        DB_USER = os.getenv("DB_USER")
+        DB_PASSWORD = os.getenv("DB_PASSWORD")
 
-    # create a cursor object
-    mycursor = mydb.cursor()
+        # connect to mysql database
+        mydb = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD
+        )
+
+        # create a cursor object
+        mycursor = mydb.cursor()
+    except mysql.connector.Error as error:
+        print(f"Error: Failed to connect to database: {error}")
+        mydb = None
+        mycursor = None
 
 def setup_database():
-    # reset db if exists
-    mycursor.execute("DROP DATABASE IF EXISTS pytone")
-    # create new db
-    mycursor.execute("CREATE DATABASE pytone")
-    # select the db
-    mycursor.execute("USE pytone") 
+    try:
+        # reset db if exists
+        mycursor.execute("DROP DATABASE IF EXISTS pytone")
+        # create new db
+        mycursor.execute("CREATE DATABASE pytone")
+        # select the db
+        mycursor.execute("USE pytone") 
 
-    # create song table
-    mycursor.execute("""
-        CREATE TABLE Song (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255),
-            artist VARCHAR(255),
-            duration INT,
-            thumbnail_url VARCHAR(500),
-            youtube_url VARCHAR(500)
-        )
-    """)
+        # create song table
+        mycursor.execute("""
+            CREATE TABLE Song (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255),
+                artist VARCHAR(255),
+                duration INT,
+                thumbnail_url VARCHAR(500),
+                youtube_url VARCHAR(500)
+            )
+        """)
 
-    # create hash table with song as foreign key
-    mycursor.execute("""
-        CREATE TABLE Hash (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            hash_value VARCHAR(255),
-            song_id INT,
-            offset_time FLOAT,
-            FOREIGN KEY (song_id) REFERENCES Song(id),
-            INDEX (hash_value)
-        )
-    """)
+        # create hash table with song as foreign key
+        mycursor.execute("""
+            CREATE TABLE Hash (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                hash_value VARCHAR(255),
+                song_id INT,
+                offset_time FLOAT,
+                FOREIGN KEY (song_id) REFERENCES Song(id),
+                INDEX (hash_value)
+            )
+        """)
 
-    # save changes
-    mydb.commit()
+        # save changes
+        mydb.commit()
+
+    except mysql.connector.Error as error:
+        # throw error if this failed
+        print(f"Error: Failed to setup database: {error}")
+        mydb.rollback()
 
 def show_db_tables():
-    # retrieve table list
+    # retrieve tables
     mycursor.execute("SHOW TABLES")
     for x in mycursor:
         print(x)
 
 def get_all_songs():
     try:
+        # try to get all songs from the database by id in descending order
         sql = "SELECT name, artist, duration, thumbnail_url FROM Song ORDER BY id DESC"
-
         mycursor.execute(sql)
 
         return mycursor.fetchall()
-    except mysql.connector.Error as err:
-        print(f"Error fetching the library: {err}")
+    
+    except mysql.connector.Error as error:
+        # throw error if this failed
+        print(f"Error: Failed to fetch the library: {error}")
+
+        # return an empty list
         return []
 
 def add_song(name, artist, duration, thumbnail_url, youtube_url):
     try:
-        # check for duplicate with limit to prevent unread result errors
+        # check for duplicate song with limit to prevent unread result errors
         check_sql = "SELECT id FROM Song WHERE name = %s AND artist = %s LIMIT 1"
         # values to check
         check_val = (name, artist)
@@ -109,42 +125,53 @@ def add_song(name, artist, duration, thumbnail_url, youtube_url):
         # return new song id
         return mycursor.lastrowid
 
-    except mysql.connector.Error as err:
-        # print error message
-        print(f"Error: failed to add song: {err}")
+    except mysql.connector.Error as error:
+        # throw error if this failed
+        print(f"Error: Failed to add song: {error}")
     
         # return none
         return None
     
 def add_hashes_batch(val_list):
     try:
+        # insert command
         sql = "INSERT INTO Hash (hash_value, song_id, offset_time) VALUES (%s, %s, %s)"
         
-        # define safe batch size to avoid max packet error
+        # define a batch size to insert hashes in bulk
         batch_size = 100000 
 
-        # process data in chunks
+        # process data in batches
         for i in range(0, len(val_list), batch_size):
+            # get a hash batch
             chunk = val_list[i:i + batch_size]
+    
+            # insert the batch
             mycursor.executemany(sql, chunk)
-            # commit each chunk to keep connection alive
+    
+            # commit the batch
             mydb.commit()
 
-    except mysql.connector.Error as err:
-        print(f"Error batch inserting: {err}")
+    except mysql.connector.Error as error:
+        # throw error if this failed
+        print(f"Error: Failed to insert batch: {error}")
 
 def get_song_by_id(song_id):
     try:
-        # select specific fields
+        # select song fields
         sql = "SELECT name, artist, duration, thumbnail_url, youtube_url FROM Song WHERE id = %s"
+        # value to select
         val = (song_id,)
         
-        # execute query
+        # execute select
         mycursor.execute(sql, val)
         
-        # return single result
+        # return a single result
         return mycursor.fetchone()
-    except mysql.connector.Error:
+
+    except mysql.connector.Error as error:
+        # throw error if this failed
+        print(f"Error: Failed to get song by id: {error}")
+
         return None
 
 def get_hashes_by_song(song_id):
@@ -160,9 +187,9 @@ def get_hashes_by_song(song_id):
         # return list of hashes
         return mycursor.fetchall()
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as error:
         # print error message
-        print("Error: Failed to retrieve hashes.")
+        print(f"Error: Failed to retrieve hashes: {error}")
     
         # return empty list
         return []
@@ -187,9 +214,9 @@ def get_song_via_hash(hash_val):
         # return first match or none
         return mycursor.fetchone()
 
-    except mysql.connector.Error as err:
+    except mysql.connector.Error as error:
         # print error message
-        print(f"Error: Failed to find song: {err}")
+        print(f"Error: Failed to find song: {error}")
 
         # return none
         return None
@@ -205,5 +232,9 @@ def get_matches_from_hash(hash_val):
         
         # return all hits
         return mycursor.fetchall()
-    except mysql.connector.Error:
+
+    except mysql.connector.Error as error:
+        # throw error if this failed
+        print(f"Error: Failed to get matches from hash: {error}")
+
         return []
