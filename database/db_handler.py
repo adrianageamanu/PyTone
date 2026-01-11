@@ -43,7 +43,8 @@ def setup_database():
             name VARCHAR(255),
             artist VARCHAR(255),
             duration INT,
-            thumbnail_url VARCHAR(500)
+            thumbnail_url VARCHAR(500),
+            youtube_url VARCHAR(500)
         )
     """)
 
@@ -66,7 +67,7 @@ def show_db_tables():
     for x in mycursor:
         print(x)
 
-def add_song(name, artist, duration, thumbnail_url):
+def add_song(name, artist, duration, thumbnail_url, youtube_url):
     try:
         # check for duplicate with limit to prevent unread result errors
         check_sql = "SELECT id FROM Song WHERE name = %s AND artist = %s LIMIT 1"
@@ -83,9 +84,9 @@ def add_song(name, artist, duration, thumbnail_url):
             return result[0]
 
         # insert command
-        sql = "INSERT INTO Song (name, artist, duration, thumbnail_url) VALUES (%s, %s, %s, %s)"
+        sql = "INSERT INTO Song (name, artist, duration, thumbnail_url, youtube_url) VALUES (%s, %s, %s, %s, %s)"
         # values to insert
-        val = (name, artist, duration, thumbnail_url)
+        val = (name, artist, duration, thumbnail_url, youtube_url)
 
         # execute insert
         mycursor.execute(sql, val)
@@ -96,9 +97,9 @@ def add_song(name, artist, duration, thumbnail_url):
         # return new song id
         return mycursor.lastrowid
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
         # print error message
-        print("Error: failed to add song.")
+        print(f"Error: failed to add song: {err}")
     
         # return none
         return None
@@ -145,7 +146,7 @@ def get_song_via_hash(hash_val):
         # join tables to find song details
         # with limit to prevent unread result errors
         sql = """
-            SELECT s.name, s.artist, s.duration, s.thumbnail_url 
+            SELECT s.name, s.artist, s.duration, s.thumbnail_url, s.youtube_url 
             FROM Song s 
             JOIN Hash h ON s.id = h.song_id 
             WHERE h.hash_value = %s
@@ -160,9 +161,9 @@ def get_song_via_hash(hash_val):
         # return first match or none
         return mycursor.fetchone()
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
         # print error message
-        print("Error: Failed to find song.")
+        print(f"Error: Failed to find song: {err}")
 
         # return none
         return None

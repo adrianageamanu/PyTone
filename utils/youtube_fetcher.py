@@ -12,15 +12,14 @@ def get_song_info_from_youtube(url):
 
     with yt_dlp.YoutubeDL(ydl_options) as ydl:
         # fetch direct url, no download
-        info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=False)
         return (
-            info['title'], 
-            info['uploader'], 
-            info['duration'],
-
-            # fetch thumbnail url
-            info['thumbnail_url'],
+            info.get('title', 'Unknown Artist'),
+            info.get('uploader', 'Unknown Artist'),
+            info.get('duration', 0),
+            info.get('thumbnail', ''),
 
             # fetch audio url
-            info['audio_url']
+            #info['audio_url']
+            url
         )

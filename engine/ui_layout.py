@@ -2,9 +2,35 @@ import gradio as gr
 import utils.youtube_fetcher as yt
 import time
 import random
+import traceback
+
+from database import db_handler
 
 def identify_from_youtube(url):
-    return f"Loaded Youtube song: {yt.get_song_info_from_youtube(url)}"
+    if not url:
+        return "Please paste a URL first."
+
+    try:
+        # 1. Extragem datele de pe YouTube
+        song_data = yt.get_song_info_from_youtube(url)
+        
+        if not song_data:
+            return "Error: Could not fetch data from YouTube."
+
+        # Despachetăm datele (Title, Artist, Duration, Thumb, URL)
+        title, artist, duration, thumbnail, yt_url = song_data
+
+        # 2. Le salvăm în Baza de Date    
+        # add_song returnează ID-ul noii melodii sau ID-ul existent
+        song_id = db_handler.add_song(title, artist, duration, thumbnail, yt_url)
+        
+        if song_id:
+            return f"SUCCESS! Saved to DB:\nTitle: {title}\nArtist: {artist}\nID: {song_id}"
+        else:
+            return "Error: Database save failed."
+
+    except Exception as e:
+        return f"Error: {traceback.format_exc()}"
 
 def process_identification(audio, history_list):
     """
