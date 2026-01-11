@@ -4,55 +4,17 @@ import config
 from core.audio_loader import load_audio
 from scipy.signal import spectrogram as scipy_spectrogram
 
-# def spectogram(signal):
-#     fs = config.SAMPLE_RATE
-#     window_size = config.FFT_WINDOW_SIZE
-
-#     # Calculate the total number of frames
-#     n = len(signal)
-#     num_windows = n // (window_size)
-
-#     # Initialize the Spectrogram matrix
-#     S = np.zeros((window_size, num_windows))
-#     hann_window = np.hanning(window_size)
-
-#     for i in range(num_windows):
-#         start = i * window_size
-#         end = start + window_size
-#         window = signal[start:end]
-        
-#         # Apply the Hann windowing function to the current segment
-#         hanned = np.zeros(window_size)
-#         for j in range(window_size):
-#             hanned[j] = window[j] * hann_window[j]
-        
-#         F = np.fft.fft(hanned, n=2 * window_size)
-        
-#         S[:, i] = np.abs(F[:window_size])
-
-#     # Generate the frequency vector
-#     f = np.zeros(window_size)
-#     for i in range(window_size):
-#         f[i] = i * fs / (2 * window_size)
-
-#     # Generate the time vector
-#     t = np.zeros(num_windows)
-#     for i in range(num_windows):
-#         t[i] = i * window_size / fs
-
-#     return S, f, t
-
 def spectogram(signal):
     fs = config.SAMPLE_RATE
     window_size = config.FFT_WINDOW_SIZE
 
-    # use scipy c-optimized implementation instead of python loop
+    # use scipy c-optimized implementation
     f, t, S = scipy_spectrogram(
         x=signal,
         fs=fs,
         window='hann',
         nperseg=window_size,
-        noverlap=0,
+        noverlap=0, # no overlap for speed
         nfft=window_size * 2,
         mode='magnitude'
     )
@@ -63,50 +25,49 @@ def extract_peaks(S, f, t):
     peaks = []
     rows, cols = S.shape
     
-    # Iterate from 1 to cols-1 to always have left/right neighbors
+    # define 3 frequency bands to capture bass, vocals, and highs
+    # structure: (min_freq, max_freq)
+    bands = [
+        (0, 500),      # bass
+        (500, 2000),   # mids/vocals
+        (2000, 6000)   # treble
+    ]
+    
+    # iterate through time columns
     for i in range(1, cols - 1):
-        column = S[:, i]
+        # calculate dynamic threshold for this time slice
+        col_mean = np.mean(S[:, i])
         
-        # Local threshold for the current time window
-        threshold = np.mean(column) + 0.5 * np.std(column)
-        
-        # Define 3 frequency bands with clear names
-        low_mask = (f < 500)
-        mid_mask = (f >= 500) & (f < 2000)
-        high_mask = (f >= 2000)
-        
-        # Extract the strongest local peak from each band
-        for mask in [low_mask, mid_mask, high_mask]:
-            band_indices = np.where(mask)[0]
+        for min_f, max_f in bands:
+            # find indices corresponding to this frequency band
+            band_mask = (f >= min_f) & (f < max_f)
+            band_indices = np.where(band_mask)[0]
             
-            max_val = -1
-            max_idx = -1
+            if len(band_indices) == 0:
+                continue
+                
+            # find the strongest frequency in this band at this time
+            # get the sub-array for this band
+            band_energies = S[band_indices, i]
             
-            for idx in band_indices:
-                if idx <= 0 or idx >= rows - 1:
-                    continue
-                
-                current_energy = S[idx, i]
-                
-                if current_energy > threshold:
-                    # Point must be greater than its 4 direct neighbors
-                    if current_energy > S[idx-1, i] and current_energy > S[idx+1, i] and \
-                       current_energy > S[idx, i-1] and current_energy > S[idx, i+1]:
-                        
-                        if current_energy > max_val:
-                            max_val = current_energy
-                            max_idx = idx
-
-            # Store the identified peak (timestamp and frequency)
-            if max_idx != -1:
-                peaks.append((t[i], f[max_idx]))
+            # find max energy in this band
+            local_max_idx = np.argmax(band_energies)
+            max_energy = band_energies[local_max_idx]
+            
+            # global index in the spectrogram
+            real_idx = band_indices[local_max_idx]
+            
+            # check if it's a true local peak (stronger than neighbors in time)
+            if max_energy > col_mean * 1.5: # must be significantly above noise
+                if max_energy > S[real_idx, i-1] and max_energy > S[real_idx, i+1]:
+                    peaks.append((t[i], f[real_idx]))
                 
     return peaks
 
 def generate_hashes(peaks):
     hashes = []
     
-    # Value recommended in Shazam paper
+    # standard shazam value
     FAN_OUT = 10 
     
     num_peaks = len(peaks)
@@ -115,34 +76,27 @@ def generate_hashes(peaks):
         for j in range(1, FAN_OUT + 1):
             if (i + j) < num_peaks:
                 
-                # Extract data for the Anchor peak
                 anchor = peaks[i]
                 t1 = anchor[0]
                 f1 = anchor[1]
                 
-                # Extract data for the Target peak
                 target = peaks[i + j]
                 t2 = target[0]
                 f2 = target[1]
                 
                 t_delta = t2 - t1
                 
-                if t_delta > 0 and t_delta <= 3.0:
+                # strict timing window (0.1s to 3s)
+                if t_delta >= 0.1 and t_delta <= 3.0:
                     
-                    # Round frequencies to integers to handle small recording errors
                     f1_int = int(f1)
                     f2_int = int(f2)
-                    
-                    # Format the time delta to 2 decimal places
                     t_delta_formated = round(t_delta, 2)
                     
-                    # Format: Frequency1 | Frequency2 | Time_Delta
-                    raw_string = str(f1_int) + "|" + str(f2_int) + "|" + str(t_delta_formated)
+                    raw_string = f"{f1_int}|{f2_int}|{t_delta_formated}"
                     
-                    # Encode the string to bytes so it can be hashed
                     encoded_string = raw_string.encode('utf-8')
                     
-                    # Apply the SHA-1 algorithm to create a unique signature
                     sha1_obj = hashlib.sha1(encoded_string)
                     hash_result = sha1_obj.hexdigest()
                     
@@ -153,11 +107,7 @@ def generate_hashes(peaks):
 
 def process_audio(path):
     signal = load_audio(path)
-    
     S, f, t = spectogram(signal)
-    
     peaks = extract_peaks(S, f, t)
-    
     final_hashes = generate_hashes(peaks)
-    
     return final_hashes

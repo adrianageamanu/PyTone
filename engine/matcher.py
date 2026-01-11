@@ -13,12 +13,13 @@ def find_potential_matches(sample_hashes):
             continue
 
         for song_id, t_db in database_hits:
+            # calculate offset: t_db = t_sample + offset
+            # so offset = t_db - t_sample
             time_diff = t_db - t_sample
             
-            # round to 1 decimal
+            # quantize to 0.1s to allow slight timing errors
             time_diff = round(time_diff, 1)
             
-            # group by song id
             if song_id not in matches_found:
                 matches_found[song_id] = []
             
@@ -30,13 +31,14 @@ def rank_matches(matches_found):
     final_results = []
 
     for song_id, offsets in matches_found.items():
-        # Use Counter to create a histogram of the time differences
+        # find the most common time offset
         offset_counts = Counter(offsets)
-        
-        # Get the most frequent offset and its count
         best_offset, peak_score = offset_counts.most_common(1)[0]
         
-        # fetch song info using db handler
+        # basic threshold to avoid noise
+        if peak_score < 3:
+            continue
+        
         song_info = db_handler.get_song_by_id(song_id)
         
         if song_info:
@@ -50,30 +52,26 @@ def rank_matches(matches_found):
                 "offset": best_offset
             })
 
-    # Sort results so the highest score is at the top
+    # sort by highest score
     final_results.sort(key=lambda x: x['score'], reverse=True)
     
     return final_results
 
 def identify_song(file_path):
-    # Get hashes from the audio file
     sample_hashes = process_audio(file_path)
     
     if not sample_hashes:
-        print("No hashes generated. Check audio file.")
+        print("no hashes generated.")
         return None
 
-    # Find matches in database
     matches = find_potential_matches(sample_hashes)
     
     if not matches:
-        print("No matches found in database.")
+        print("no matches found.")
         return None
 
-    # Rank them
     ranked_list = rank_matches(matches)
 
-    # Return the top match
     if ranked_list:
         return ranked_list[0]
     

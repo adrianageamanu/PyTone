@@ -119,9 +119,17 @@ def add_song(name, artist, duration, thumbnail_url, youtube_url):
 def add_hashes_batch(val_list):
     try:
         sql = "INSERT INTO Hash (hash_value, song_id, offset_time) VALUES (%s, %s, %s)"
-        # insert all rows in one go
-        mycursor.executemany(sql, val_list)
-        mydb.commit()
+        
+        # define safe batch size to avoid max packet error
+        batch_size = 100000 
+
+        # process data in chunks
+        for i in range(0, len(val_list), batch_size):
+            chunk = val_list[i:i + batch_size]
+            mycursor.executemany(sql, chunk)
+            # commit each chunk to keep connection alive
+            mydb.commit()
+
     except mysql.connector.Error as err:
         print(f"Error batch inserting: {err}")
 
