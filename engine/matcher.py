@@ -77,5 +77,11 @@ def identify_song(file_path, db_cursor):
         print("No matches found in database.")
         return []
 
-    # Rank them and return the list
-    return rank_matches(matches, db_cursor)
+    # Rank them
+    ranked_list = rank_matches(matches, db_cursor)
+
+    # Return the top match
+    if ranked_list:
+        return ranked_list[0]
+    
+    return None
