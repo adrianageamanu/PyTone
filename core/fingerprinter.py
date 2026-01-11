@@ -3,105 +3,83 @@ import hashlib
 import config
 from core.audio_loader import load_audio
 from scipy.signal import spectrogram as scipy_spectrogram
+from scipy.ndimage import maximum_filter
 
 def spectogram(signal):
+    # standard shazam settings
     fs = config.SAMPLE_RATE
     window_size = config.FFT_WINDOW_SIZE
-
-    # use scipy c-optimized implementation
+    
+    # create spectrogram
     f, t, S = scipy_spectrogram(
         x=signal,
         fs=fs,
         window='hann',
         nperseg=window_size,
-        noverlap=0, # no overlap for speed
+        noverlap=int(window_size * config.OVERLAP_RATIO),
         nfft=window_size * 2,
         mode='magnitude'
     )
-
+    
+    # use log-magnitude (decibels) for better handling of dynamic range
+    # this matches the Shazam logic
+    S = np.log(S + 1e-10)
+    
     return S, f, t
 
 def extract_peaks(S, f, t):
-    peaks = []
-    rows, cols = S.shape
+    # these parameters determine the density of peaks
+    # (20, 20) is the standard Dejavu value for good collision resistance
+    struct_size = (20, 20) 
     
-    # define 3 frequency bands to capture bass, vocals, and highs
-    # structure: (min_freq, max_freq)
-    bands = [
-        (0, 500),      # bass
-        (500, 2000),   # mids/vocals
-        (2000, 6000)   # treble
-    ]
+    # find local maxima in 2D (time and frequency)
+    # this is much faster than iterating manually
+    local_max = maximum_filter(S, size=struct_size) == S
     
-    # iterate through time columns
-    for i in range(1, cols - 1):
-        # calculate dynamic threshold for this time slice
-        col_mean = np.mean(S[:, i])
-        
-        for min_f, max_f in bands:
-            # find indices corresponding to this frequency band
-            band_mask = (f >= min_f) & (f < max_f)
-            band_indices = np.where(band_mask)[0]
-            
-            if len(band_indices) == 0:
-                continue
-                
-            # find the strongest frequency in this band at this time
-            # get the sub-array for this band
-            band_energies = S[band_indices, i]
-            
-            # find max energy in this band
-            local_max_idx = np.argmax(band_energies)
-            max_energy = band_energies[local_max_idx]
-            
-            # global index in the spectrogram
-            real_idx = band_indices[local_max_idx]
-            
-            # check if it's a true local peak (stronger than neighbors in time)
-            if max_energy > col_mean * 1.5: # must be significantly above noise
-                if max_energy > S[real_idx, i-1] and max_energy > S[real_idx, i+1]:
-                    peaks.append((t[i], f[real_idx]))
-                
+    # dynamic threshold: only keep peaks that are significant relative to the background
+    # using 'mean' ensures we get peaks even in quiet songs
+    background = (S > np.mean(S))
+    
+    # intersection of local maxima and background threshold
+    peaks_mask = local_max & background
+    
+    # extract indices
+    freq_idx, time_idx = np.where(peaks_mask)
+    
+    # zip and sort by time (required for hashing loop)
+    peaks = list(zip(t[time_idx], f[freq_idx]))
+    peaks.sort(key=lambda x: x[0])
+    
     return peaks
 
 def generate_hashes(peaks):
     hashes = []
-    
-    # standard shazam value
-    FAN_OUT = 10 
+    # fan_out determines how many pairs we make per peak
+    # 15 is the standard value to get ~3000 hashes per song
+    FAN_OUT = config.FAN_VALUE 
     
     num_peaks = len(peaks)
     
     for i in range(num_peaks):
-        for j in range(1, FAN_OUT + 1):
+        for j in range(1, FAN_OUT):
             if (i + j) < num_peaks:
                 
-                anchor = peaks[i]
-                t1 = anchor[0]
-                f1 = anchor[1]
-                
-                target = peaks[i + j]
-                t2 = target[0]
-                f2 = target[1]
+                t1, f1 = peaks[i]
+                t2, f2 = peaks[i + j]
                 
                 t_delta = t2 - t1
                 
-                # strict timing window (0.1s to 3s)
-                if t_delta >= 0.1 and t_delta <= 3.0:
+                # strict window between 0s and 10s (standard is often 0-4s)
+                if 0 <= t_delta <= 10.0: 
                     
-                    f1_int = int(f1)
-                    f2_int = int(f2)
-                    t_delta_formated = round(t_delta, 2)
+                    # use binning for frequencies to improve match accuracy
+                    # round t_delta to 2 decimals to allow slight timing jitter
+                    h_str = f"{int(f1)}|{int(f2)}|{round(t_delta, 2)}"
                     
-                    raw_string = f"{f1_int}|{f2_int}|{t_delta_formated}"
+                    h_val = hashlib.sha1(h_str.encode('utf-8')).hexdigest()
                     
-                    encoded_string = raw_string.encode('utf-8')
-                    
-                    sha1_obj = hashlib.sha1(encoded_string)
-                    hash_result = sha1_obj.hexdigest()
-                    
-                    final_pair = (hash_result, t1)
-                    hashes.append(final_pair)
+                    # add to list
+                    hashes.append((h_val, t1))
                     
     return hashes
 

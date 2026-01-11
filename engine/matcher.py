@@ -1,29 +1,28 @@
 from database import db_handler
-from core.fingerprinter import process_audio
 from collections import Counter
 
 def find_potential_matches(sample_hashes):
     matches_found = {}
 
     for hash_value, t_sample in sample_hashes:
-        # get hits from db handler
+        # fetch all occurrences of this hash from db
         database_hits = db_handler.get_matches_from_hash(hash_value)
-            
+        
         if not database_hits:
             continue
-
-        for song_id, t_db in database_hits:
-            # calculate offset: t_db = t_sample + offset
-            # so offset = t_db - t_sample
-            time_diff = t_db - t_sample
             
-            # quantize to 0.1s to allow slight timing errors
-            time_diff = round(time_diff, 1)
+        for song_id, t_db in database_hits:
+            # calculate the relative offset
+            # if the song matches, (t_db - t_sample) should be constant
+            offset = t_db - t_sample
+            
+            # quantize offset to 0.1s to handle float inaccuracies
+            offset_bin = round(offset, 1)
             
             if song_id not in matches_found:
                 matches_found[song_id] = []
             
-            matches_found[song_id].append(time_diff)
+            matches_found[song_id].append(offset_bin)
 
     return matches_found
 
@@ -31,12 +30,13 @@ def rank_matches(matches_found):
     final_results = []
 
     for song_id, offsets in matches_found.items():
-        # find the most common time offset
+        # count the occurences of the most common offset
+        # this is the 'score' of the match
         offset_counts = Counter(offsets)
         best_offset, peak_score = offset_counts.most_common(1)[0]
         
-        # basic threshold to avoid noise
-        if peak_score < 3:
+        # increased threshold: with ~3000 hashes, a real match should have >10 hits
+        if peak_score < 10:
             continue
         
         song_info = db_handler.get_song_by_id(song_id)
@@ -52,22 +52,23 @@ def rank_matches(matches_found):
                 "offset": best_offset
             })
 
-    # sort by highest score
+    # sort by highest score first
     final_results.sort(key=lambda x: x['score'], reverse=True)
     
     return final_results
 
 def identify_song(file_path):
+    # local import
+    from core.fingerprinter import process_audio
+    
     sample_hashes = process_audio(file_path)
     
     if not sample_hashes:
-        print("no hashes generated.")
         return None
 
     matches = find_potential_matches(sample_hashes)
     
     if not matches:
-        print("no matches found.")
         return None
 
     ranked_list = rank_matches(matches)
